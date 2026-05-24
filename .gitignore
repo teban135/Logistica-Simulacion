@@ -1,0 +1,8 @@
+.agents
+.claude
+.vscode
+
+#excluir grafos
+graphify-out/
+scratch/
+Simulacion_entrega_1y_2.pdf

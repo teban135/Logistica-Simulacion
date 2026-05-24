@@ -1,0 +1,14 @@
+Par metro,Valor
+N mero de camiones,10.0
+D as de datos,344.0
+Total llegadas registradas,1000.0
+Media Waiting_Time (seg),35.1
+Desviaci n est ndar Waiting_Time,14.5
+M nimo Waiting_Time,10.0
+M ximo Waiting_Time,60.0
+Percentil 80 Waiting_Time,50.2
+Percentil 90 Waiting_Time,55.0
+Utilizaci n media observada (%),79.6
+Tasa llegada total (pedidos/hora),0.11
+Temperatura media ( C),23.9
+Humedad media (%),65.0
