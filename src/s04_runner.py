@@ -18,14 +18,22 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 # Importar módulos propios
 from s03_simulacion import correr_simulacion
 
-# Configuración de Tráfico por defecto (Horas Pico)
-MULTIPLICADORES_TRAFICO_BASE = {h: 1.0 for h in range(24)}
+# Configuración de Tráfico CON picos (situación problemática real)
+# Basado en Urban Mobility Report (TTI): +30-50% en horas pico
+MULTIPLICADORES_TRAFICO_CON_PICO = {h: 1.0 for h in range(24)}
 # Pico Mañana (07:00 - 09:00)
-MULTIPLICADORES_TRAFICO_BASE.update({7: 1.3, 8: 1.3, 9: 1.2})
+MULTIPLICADORES_TRAFICO_CON_PICO.update({7: 1.3, 8: 1.3, 9: 1.2})
 # Pico Mediodía (12:00 - 14:00)
-MULTIPLICADORES_TRAFICO_BASE.update({12: 1.1, 13: 1.1, 14: 1.1})
+MULTIPLICADORES_TRAFICO_CON_PICO.update({12: 1.1, 13: 1.1, 14: 1.1})
 # Pico Tarde (17:00 - 19:00)
-MULTIPLICADORES_TRAFICO_BASE.update({17: 1.5, 18: 1.5, 19: 1.4})
+MULTIPLICADORES_TRAFICO_CON_PICO.update({17: 1.5, 18: 1.5, 19: 1.4})
+
+# Configuración de Tráfico SIN picos (intervención: despacho en horario distribuido)
+# Simula turnos de distribución fuera de hora pico (estrategia de gestión operativa)
+MULTIPLICADORES_TRAFICO_SIN_PICO = {h: 1.0 for h in range(24)}
+
+# Alias para compatibilidad
+MULTIPLICADORES_TRAFICO_BASE = MULTIPLICADORES_TRAFICO_CON_PICO
 
 def crear_base_datos(db_path=None):
     """Crea la base de datos SQLite con las tablas necesarias"""
@@ -238,76 +246,103 @@ def main():
     resultados_dir = os.path.join(PROJECT_ROOT, "resultados")
     os.makedirs(resultados_dir, exist_ok=True)
     
-    # Configurar demandas ajustadas
-    params_demanda_x50 = params.copy()
-    params_demanda_x50['tasa_llegada_por_hora'] = {h: t * 50 for h, t in params['tasa_llegada_por_hora'].items()}
-    
-    params_demanda_x150 = params.copy()
-    params_demanda_x150['tasa_llegada_por_hora'] = {h: t * 150 for h, t in params['tasa_llegada_por_hora'].items()}
+    # =========================================================
+    # Demanda realista alta: λ × 850
+    # Con la tasa base de ~0.12 ped/hora, x850 ≈ 102 ped/hora.
+    # Con 3 camiones y E[S]=90 seg → ρ ≈ 0.85 (sistema saturado).
+    # Esto garantiza cola real (Wq > 0) para demostrar mejoras.
+    # Para rho = lambda * ES / c = (102/3600) * 90 / 3 ≈ 0.85
+    # =========================================================
+    params_demanda_alta = params.copy()
+    params_demanda_alta['tasa_llegada_por_hora'] = {
+        h: t * 850 for h, t in params['tasa_llegada_por_hora'].items()
+    }
 
-    # ESCENARIO E1: Línea base
+    # =========================================================
+    # ESCENARIO E1: Situación Actual Problemática (Línea Base)
+    # Flota mínima (3 camiones) + Demanda alta + Tráfico pico
+    # → Sistema saturado: Wq alto, P(delay) > 40%
+    # → Este es el PROBLEMA que queremos resolver
+    # =========================================================
     print("\n" + "=" * 40)
-    print("ESCENARIO E1: Flota completa, Demanda x50")
+    print("ESCENARIO E1: Situación Actual (3 camiones, demanda alta, tráfico pico)")
     print("=" * 40)
-    
+
     correr_experimento(
-        escenario='E1_base_x50',
-        num_camiones=params['num_camiones'],
-        params_simulacion=params_demanda_x50,
-        multiplicadores_trafico=MULTIPLICADORES_TRAFICO_BASE,
+        escenario='E1_situacion_actual',
+        num_camiones=3,
+        params_simulacion=params_demanda_alta,
+        multiplicadores_trafico=MULTIPLICADORES_TRAFICO_CON_PICO,
         replicas=30,
         duracion_horas=168
     )
-    
-    # ESCENARIO E2: Con menos camiones (prueba de estrés)
+
+    # =========================================================
+    # ESCENARIO E2: Intervención — Ampliación de Flota
+    # 8 camiones + Demanda alta + Tráfico pico
+    # → Misma presión de demanda y tráfico que E1
+    # → Intervención: +5 camiones adicionales
+    # → Pregunta: ¿Cuánto reduce el Wq solo con más flota?
+    # =========================================================
     print("\n" + "=" * 40)
-    print("ESCENARIO E2: Reducción de flota (5 camiones), Demanda x50")
+    print("ESCENARIO E2: Más Flota (8 camiones, demanda alta, tráfico pico)")
     print("=" * 40)
-    
+
     correr_experimento(
-        escenario='E2_menos_camiones_x50',
-        num_camiones=5,
-        params_simulacion=params_demanda_x50,
-        multiplicadores_trafico=MULTIPLICADORES_TRAFICO_BASE,
-        replicas=30,
-        duracion_horas=168
-    )
-    
-    # ESCENARIO E3: Demanda pico
-    print("\n" + "=" * 40)
-    print("ESCENARIO E3: 8 camiones, Demanda x150")
-    print("=" * 40)
-    
-    correr_experimento(
-        escenario='E3_demanda_x150',
+        escenario='E2_mas_camiones',
         num_camiones=8,
-        params_simulacion=params_demanda_x150,
-        multiplicadores_trafico=MULTIPLICADORES_TRAFICO_BASE,
-        replicas=30,
-        duracion_horas=168
-    )
-    
-    # ESCENARIO E4: Prueba de estrés
-    print("\n" + "=" * 40)
-    print("ESCENARIO E4: 1 camión vs Demanda base")
-    print("=" * 40)
-    
-    correr_experimento(
-        escenario='E4_estres_base',
-        num_camiones=1,
-        params_simulacion=params,
-        multiplicadores_trafico=MULTIPLICADORES_TRAFICO_BASE,
+        params_simulacion=params_demanda_alta,
+        multiplicadores_trafico=MULTIPLICADORES_TRAFICO_CON_PICO,
         replicas=30,
         duracion_horas=168
     )
 
-    
+    # =========================================================
+    # ESCENARIO E3: Intervención — Gestión de Demanda (Sin Picos)
+    # 3 camiones + Demanda alta + SIN tráfico pico
+    # → Misma flota que E1 (sin inversión extra en camiones)
+    # → Intervención: despachar en horarios distribuidos fuera de pico
+    # → Pregunta: ¿Cuánto reduce el Wq solo con gestión operativa?
+    # =========================================================
+    print("\n" + "=" * 40)
+    print("ESCENARIO E3: Demanda Distribuida (3 camiones, demanda alta, sin pico)")
+    print("=" * 40)
+
+    correr_experimento(
+        escenario='E3_demanda_distribuida',
+        num_camiones=3,
+        params_simulacion=params_demanda_alta,
+        multiplicadores_trafico=MULTIPLICADORES_TRAFICO_SIN_PICO,
+        replicas=30,
+        duracion_horas=168
+    )
+
+    # =========================================================
+    # ESCENARIO E4: Solución Óptima Combinada
+    # 6 camiones + Demanda alta + SIN tráfico pico
+    # → Combina ambas intervenciones: flota balanceada + gestión operativa
+    # → Pregunta: ¿Cuál es la reducción máxima de Wq al combinar ambas?
+    # → Este es el escenario RECOMENDADO (menor Wq, costo equilibrado)
+    # =========================================================
+    print("\n" + "=" * 40)
+    print("ESCENARIO E4: Solucion Optima (6 camiones, demanda alta, sin pico)")
+    print("=" * 40)
+
+    correr_experimento(
+        escenario='E4_solucion_optima',
+        num_camiones=6,
+        params_simulacion=params_demanda_alta,
+        multiplicadores_trafico=MULTIPLICADORES_TRAFICO_SIN_PICO,
+        replicas=30,
+        duracion_horas=168
+    )
+
     print("\n" + "=" * 60)
-    print("SIMULACIÓN COMPLETADA")
+    print("SIMULACION COMPLETADA")
     print("=" * 60)
     print("\nResultados guardados en: simulacion.db")
     print("Ejecute s05_exportar_csv.py para exportar a CSV")
-    print("Luego abra analisis_resultados.R en RStudio")
+    print("Luego abra analisis_entrega3.Rmd en RStudio")
 
 if __name__ == "__main__":
     main()
