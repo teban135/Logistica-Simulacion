@@ -1,8 +1,8 @@
-  # extract_rmd_images.py
-  # -------------------------------------------------
-  # Render an R Markdown file and collect all images produced
-  # by knitr/rmarkdown (the default “figure‑html” folder).
-  # -------------------------------------------------
+# extract_rmd_images.py
+# -------------------------------------------------
+# Renderiza un archivo R Markdown y recolecta todas las imágenes producidas
+# por knitr/rmarkdown (carpeta “figure‑html”).
+# -------------------------------------------------
 
 import os
 import shutil
@@ -13,9 +13,9 @@ from pathlib import Path
 
 def render_rmd(rmd_path: Path) -> Path:
     """
-    Calls `Rscript -e "rmarkdown::render('file.Rmd')"` which creates
-    `file.html` and a `file_files/figure-html/` directory with the images.
-    Returns the path to the generated HTML file.
+    Llama a `Rscript -e "rmarkdown::render('file.Rmd', clean=FALSE)"` que crea
+    `file.html` y una carpeta `file_files/figure-html/` con las imágenes.
+    Devuelve la ruta al HTML generado.
     """
     if not rmd_path.is_file():
         sys.exit(f"❌  {rmd_path} does not exist")
@@ -23,7 +23,7 @@ def render_rmd(rmd_path: Path) -> Path:
     cmd = [
         "Rscript",
         "-e",
-        f"rmarkdown::render('{rmd_path.as_posix()}')",
+        f"rmarkdown::render('{rmd_path.as_posix()}', clean=FALSE)",
     ]
     print(f"⚙️  Rendering {rmd_path.name} …")
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -31,7 +31,6 @@ def render_rmd(rmd_path: Path) -> Path:
     if result.returncode != 0:
         sys.exit(f"❌  R render failed:\n{result.stderr}")
 
-    # rmarkdown creates <basename>.html in the same folder
     html_path = rmd_path.with_suffix(".html")
     if not html_path.is_file():
         sys.exit("❌  Expected HTML output not found")
@@ -39,16 +38,23 @@ def render_rmd(rmd_path: Path) -> Path:
 
 def find_figure_dir(rmd_path: Path) -> Path:
     """
-    knitr stores figures in `<basename>_files/figure-html/`.
+    Busca la carpeta de figuras generada por knitr.
+    Normalmente es `<basename>_files/figure-html/`, pero si no está allí,
+    se busca recursivamente en subdirectorios.
     """
     base = rmd_path.stem
-    fig_dir = rmd_path.parent / f"{base}_files" / "figure-html"
-    if not fig_dir.is_dir():
-        sys.exit(f"❌  Figure directory not found: {fig_dir}")
-    return fig_dir
+    expected = rmd_path.parent / f"{base}_files" / "figure-html"
+    if expected.is_dir():
+        return expected
+
+    # búsqueda recursiva en todo el proyecto
+    candidates = list(rmd_path.parent.rglob("figure-html"))
+    if not candidates:
+        sys.exit(f"❌  Figure directory not found for {base}")
+    return candidates[0]
 
 def copy_images(src_dir: Path, dst_dir: Path):
-    """Copy .png, .jpg, .jpeg, .svg, .pdf files to the destination."""
+    """Copia archivos de imagen al destino."""
     dst_dir.mkdir(parents=True, exist_ok=True)
     copied = 0
     for ext in ("*.png", "*.jpg", "*.jpeg", "*.svg", "*.pdf"):
@@ -81,15 +87,15 @@ def main():
     rmd_path = args.rmd.resolve()
     out_dir = args.output.resolve()
 
-    # 1️⃣Render the Rmd → HTML
+    # 1️⃣ Renderizar el Rmd → HTML
     html_path = render_rmd(rmd_path)
     print(f"📄  HTML output: {html_path}")
 
-    # 2️⃣Locate the figure‑html folder
+    # 2️⃣ Localizar la carpeta de figuras
     fig_dir = find_figure_dir(rmd_path)
     print(f"📁  Figure directory: {fig_dir}")
 
-    # 3️⃣Copy images to the requested output folder
+    # 3️⃣ Copiar imágenes al directorio de salida
     copy_images(fig_dir, out_dir)
 
 if __name__ == "__main__":
